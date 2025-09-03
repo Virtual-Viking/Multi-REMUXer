@@ -29,6 +29,3 @@ BEGIN
         VALUE "Translation", 0x409, 1200
     END
 END
-
-// Application manifest for Windows 10/11 compatibility
-1 RT_MANIFEST "app.manifest"
