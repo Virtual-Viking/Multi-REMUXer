@@ -5,7 +5,7 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -municode
 LDFLAGS = -static-libgcc -static-libstdc++
-LIBS = -lcomctl32 -lshell32 -lole32 -luuid -lshlwapi
+LIBS = -lcomctl32 -lshell32 -lole32 -luuid -lshlwapi -lgdi32
 
 # Directories
 SRCDIR = src
