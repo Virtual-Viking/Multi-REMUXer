@@ -1,5 +1,5 @@
 # Makefile for Multi-REMUXer Native Windows Application
-# Requires MinGW-w64
+# Requires Visual Studio Build Tools or MinGW-w64
 
 # Compiler settings
 CXX = g++
@@ -48,6 +48,25 @@ clean:
 	if exist $(OBJDIR) rmdir /s /q $(OBJDIR)
 	if exist $(BINDIR) rmdir /s /q $(BINDIR)
 
+# Install (copy to system folder)
+install: $(TARGET)
+	copy $(TARGET) "C:\Program Files\MultiREMUXer\"
+
+# Package for distribution
+package: $(TARGET)
+	mkdir dist
+	copy $(TARGET) dist\
+	copy ffmpeg.exe dist\
+	copy README.txt dist\
+	copy LICENSE.txt dist\
+	"C:\Program Files\7-Zip\7z.exe" a -tzip MultiREMUXer_v1.0.zip dist\*
+
+.PHONY: all clean install package
+
+# Build configuration for Visual Studio
+vs_build:
+	cl /std:c++17 /O2 /EHsc $(SRCDIR)\main.cpp /Fe$(TARGET) /link comctl32.lib shell32.lib ole32.lib
+
 # Debug build
 debug: CXXFLAGS += -g -DDEBUG
 debug: $(TARGET)
@@ -55,5 +74,3 @@ debug: $(TARGET)
 # Release build with optimizations
 release: CXXFLAGS += -O3 -DNDEBUG -s
 release: $(TARGET)
-
-.PHONY: all clean debug release
