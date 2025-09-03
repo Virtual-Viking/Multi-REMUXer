@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <map>
 
 // Language name to ISO code mapping for FFmpeg
