@@ -6,14 +6,15 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <set>
 #include <thread>
 #include <filesystem>
 #include <fstream>
 #include <regex>
 #include <iostream>
-
-#pragma comment(lib, "comctl32.lib")
-#pragma comment(lib, "shell32.lib")
+#include <algorithm>
+#include "bdmv_parser.h"
+#include "ffmpeg_wrapper.h"
 
 namespace fs = std::filesystem;
 
@@ -33,15 +34,6 @@ namespace fs = std::filesystem;
 #define WM_UPDATE_PROGRESS      (WM_USER + 1)
 #define WM_ADD_LOG             (WM_USER + 2)
 #define WM_PROCESSING_COMPLETE  (WM_USER + 3)
-
-struct BDMVTitle {
-    int id;
-    std::string filename;
-    double duration;
-    size_t size;
-    std::vector<std::string> audioLanguages;
-    std::vector<std::string> subtitleLanguages;
-};
 
 struct BDMVFile {
     std::string path;
@@ -69,18 +61,6 @@ private:
     
     bool isProcessing = false;
     std::thread processingThread;
-    
-    // Language code to name mapping
-    std::map<std::string, std::string> languageMap = {
-        {"eng", "English"}, {"spa", "Spanish"}, {"fre", "French"},
-        {"ger", "German"}, {"ita", "Italian"}, {"por", "Portuguese"},
-        {"rus", "Russian"}, {"jpn", "Japanese"}, {"kor", "Korean"},
-        {"chi", "Chinese"}, {"hin", "Hindi"}, {"ara", "Arabic"},
-        {"dut", "Dutch"}, {"swe", "Swedish"}, {"nor", "Norwegian"},
-        {"dan", "Danish"}, {"fin", "Finnish"}, {"pol", "Polish"},
-        {"cze", "Czech"}, {"hun", "Hungarian"}, {"tha", "Thai"},
-        {"vie", "Vietnamese"}, {"und", "Unknown"}
-    };
     
 public:
     MultiRemuxer() {}
@@ -156,10 +136,13 @@ public:
         // Audio languages list
         hAudioListView = CreateWindow(
             WC_LISTVIEW, L"",
-            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_CHECKBOXES,
+            WS_CHILD | WS_VISIBLE | LVS_REPORT,
             750, 80, 200, 120,
             hMainWindow, (HMENU)ID_LISTVIEW_AUDIO, nullptr, nullptr
         );
+        
+        // Enable checkboxes for audio list
+        ListView_SetExtendedListViewStyle(hAudioListView, LVS_EX_CHECKBOXES);
         
         lvc.pszText = (LPWSTR)L"Audio Languages";
         lvc.cx = 180;
@@ -168,10 +151,13 @@ public:
         // Subtitle languages list  
         hSubtitleListView = CreateWindow(
             WC_LISTVIEW, L"",
-            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_CHECKBOXES,
+            WS_CHILD | WS_VISIBLE | LVS_REPORT,
             980, 80, 200, 120,
             hMainWindow, (HMENU)ID_LISTVIEW_SUBTITLES, nullptr, nullptr
         );
+        
+        // Enable checkboxes for subtitle list
+        ListView_SetExtendedListViewStyle(hSubtitleListView, LVS_EX_CHECKBOXES);
         
         lvc.pszText = (LPWSTR)L"Subtitle Languages";
         lvc.cx = 180;
@@ -359,8 +345,25 @@ public:
             // Check if it's a BDMV folder or contains BDMV
             if (fs::is_directory(fsPath)) {
                 if (fsPath.filename() == "BDMV" || fs::exists(fsPath / "BDMV")) {
-                    BDMVFile file = AnalyzeBDMVFolder(path);
-                    if (!file.titles.empty()) {
+                    // Use BDMVParser to analyze the folder
+                    std::vector<BDMVTitle> titles = BDMVParser::ParseBDMVFolder(path);
+                    
+                    if (!titles.empty()) {
+                        BDMVFile file;
+                        file.path = path;
+                        file.status = "Ready";
+                        
+                        if (fsPath.filename() == "BDMV") {
+                            file.description = fsPath.parent_path().filename().string();
+                        } else {
+                            file.description = fsPath.filename().string();
+                        }
+                        
+                        // Convert BDMVTitle to our internal format
+                        for (const auto& title : titles) {
+                            file.titles.push_back(title);
+                        }
+                        
                         files.push_back(file);
                         AddFileToListView(file, files.size());
                         AddConsoleLog("Added: " + file.description);
@@ -373,57 +376,7 @@ public:
             AddConsoleLog("Error analyzing: " + path + " - " + e.what());
         }
     }
-    
-    BDMVFile AnalyzeBDMVFolder(const std::string& path) {
-        BDMVFile file;
-        file.path = path;
-        file.status = "Ready";
         
-        fs::path fsPath(path);
-        if (fsPath.filename() == "BDMV") {
-            file.description = fsPath.parent_path().filename().string();
-        } else {
-            file.description = fsPath.filename().string();
-        }
-        
-        // Simple BDMV analysis - look for MPLS files
-        fs::path playlistDir = fsPath / "BDMV" / "PLAYLIST";
-        if (fsPath.filename() == "BDMV") {
-            playlistDir = fsPath / "PLAYLIST";
-        }
-        
-        if (fs::exists(playlistDir)) {
-            for (const auto& entry : fs::directory_iterator(playlistDir)) {
-                if (entry.path().extension() == ".mpls") {
-                    // Simple title analysis (in real implementation, parse MPLS binary)
-                    BDMVTitle title;
-                    title.id = file.titles.size();
-                    title.filename = entry.path().filename().string();
-                    title.duration = EstimateDuration(entry.path());
-                    title.size = fs::file_size(entry.path());
-                    
-                    // For demo, add some languages (real implementation would parse streams)
-                    title.audioLanguages = {"English", "Spanish", "French"};
-                    title.subtitleLanguages = {"English", "Spanish"};
-                    
-                    if (title.duration > 120) { // Skip short clips
-                        file.titles.push_back(title);
-                    }
-                }
-            }
-        }
-        
-        return file;
-    }
-    
-    double EstimateDuration(const fs::path& mplsPath) {
-        // Simple estimation based on file size (real implementation would parse MPLS)
-        size_t fileSize = fs::file_size(mplsPath);
-        if (fileSize < 1000) return 30;
-        if (fileSize < 5000) return 3600; 
-        return 7200;
-    }
-    
     void AddFileToListView(const BDMVFile& file, int index) {
         LVITEM lvi = {};
         lvi.mask = LVIF_TEXT | LVIF_PARAM;
@@ -599,7 +552,7 @@ public:
                 
                 // Update status in list view
                 std::wstring status = L"Processing...";
-                ListView_SetItemText(hFileListView, i, 3, (LPWSTR)status.c_str());
+                ListView_SetItemText(hFileListView, static_cast<int>(i), 3, (LPWSTR)status.c_str());
                 
                 // Process main title (longest duration)
                 if (!file.titles.empty()) {
@@ -610,7 +563,6 @@ public:
                     
                     std::string outputFile = outputDirectory + "\\" + file.description + ".mkv";
                     
-                    // Simulate FFmpeg processing (replace with actual FFmpeg call)
                     bool success = ProcessTitle(file.path, mainTitle, outputFile);
                     
                     if (success) {
@@ -621,7 +573,7 @@ public:
                         status = L"Error";
                     }
                     
-                    ListView_SetItemText(hFileListView, i, 3, (LPWSTR)status.c_str());
+                    ListView_SetItemText(hFileListView, static_cast<int>(i), 3, (LPWSTR)status.c_str());
                 }
                 
                 // Update progress
@@ -637,86 +589,30 @@ public:
             PostMessage(hMainWindow, WM_ADD_LOG, 0, (LPARAM)logMsg);
         }
         
-    
-    void OnProcessingComplete() {
-        isProcessing = false;
-        EnableWindow(hStartButton, TRUE);
-        EnableWindow(hStopButton, FALSE);
-        SendMessage(hProgressBar, PBM_SETPOS, 100, 0);
-        AddConsoleLog("All processing completed!");
+        PostMessage(hMainWindow, WM_PROCESSING_COMPLETE, 0, 0);
     }
-    
-    void AddConsoleLog(const std::string& message) {
-        // Get current time
-        SYSTEMTIME st;
-        GetLocalTime(&st);
-        
-        char timeStr[32];
-        sprintf_s(timeStr, "[%02d:%02d:%02d] ", st.wHour, st.wMinute, st.wSecond);
-        
-        std::string fullMessage = timeStr + message + "\r\n";
-        
-        // Append to console
-        int length = GetWindowTextLength(hConsoleEdit);
-        SendMessage(hConsoleEdit, EM_SETSEL, length, length);
-        
-        std::wstring wMessage(fullMessage.begin(), fullMessage.end());
-        SendMessage(hConsoleEdit, EM_REPLACESEL, FALSE, (LPARAM)wMessage.c_str());
-        
-        // Scroll to bottom
-        SendMessage(hConsoleEdit, EM_SCROLLCARET, 0, 0);
-    }
-    
-    void Run() {
-        MSG msg;
-        while (GetMessage(&msg, nullptr, 0, 0)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
-};
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
-    MultiRemuxer app;
-    
-    if (!app.Initialize(hInstance)) {
-        MessageBox(nullptr, L"Failed to initialize application", L"Error", MB_OK | MB_ICONERROR);
-        return 1;
-    }
-    
-    app.Run();
-    return 0;
-}
     
     bool ProcessTitle(const std::string& bdmvPath, const BDMVTitle& title, const std::string& outputFile) {
-        // Build FFmpeg command
-        std::string command = "ffmpeg -y -i \"" + bdmvPath;
-        if (fs::path(bdmvPath).filename() != "BDMV") {
-            command += "\\BDMV";
+        try {
+            // Build MPLS file path
+            std::string mplsPath = bdmvPath;
+            if (fs::path(bdmvPath).filename() != "BDMV") {
+                mplsPath += "\\BDMV";
+            }
+            mplsPath += "\\PLAYLIST\\" + title.filename;
+            
+            // Use FFmpegWrapper to process
+            FFmpegWrapper::StreamOptions options;
+            options.audioLanguages = selectedAudioLanguages;
+            options.subtitleLanguages = selectedSubtitleLanguages;
+            options.threads = 8; // Use 8 threads for good performance
+            
+            return FFmpegWrapper::RemuxBDMV(mplsPath, outputFile, options);
+            
+        } catch (const std::exception& e) {
+            AddConsoleLog("Error processing title: " + std::string(e.what()));
+            return false;
         }
-        command += "\\PLAYLIST\\" + title.filename + "\"";
-        
-        // Add stream selection based on selected languages
-        command += " -map 0:v:0"; // Main video
-        
-        // Add selected audio streams
-        for (const auto& lang : selectedAudioLanguages) {
-            // In real implementation, map specific language streams
-            command += " -map 0:a";
-        }
-        
-        // Add selected subtitle streams
-        for (const auto& lang : selectedSubtitleLanguages) {
-            // In real implementation, map specific language streams
-            command += " -map 0:s";
-        }
-        
-        command += " -c copy \"" + outputFile + "\"";
-        
-        // Execute FFmpeg (simplified - real implementation would handle output/errors)
-        int result = system(command.c_str());
-        
-        return result == 0;
     }
     
     void OnProcessingComplete() {
