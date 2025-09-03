@@ -637,8 +637,56 @@ public:
             PostMessage(hMainWindow, WM_ADD_LOG, 0, (LPARAM)logMsg);
         }
         
-        PostMessage(hMainWindow, WM_PROCESSING_COMPLETE, 0, 0);
+    
+    void OnProcessingComplete() {
+        isProcessing = false;
+        EnableWindow(hStartButton, TRUE);
+        EnableWindow(hStopButton, FALSE);
+        SendMessage(hProgressBar, PBM_SETPOS, 100, 0);
+        AddConsoleLog("All processing completed!");
     }
+    
+    void AddConsoleLog(const std::string& message) {
+        // Get current time
+        SYSTEMTIME st;
+        GetLocalTime(&st);
+        
+        char timeStr[32];
+        sprintf_s(timeStr, "[%02d:%02d:%02d] ", st.wHour, st.wMinute, st.wSecond);
+        
+        std::string fullMessage = timeStr + message + "\r\n";
+        
+        // Append to console
+        int length = GetWindowTextLength(hConsoleEdit);
+        SendMessage(hConsoleEdit, EM_SETSEL, length, length);
+        
+        std::wstring wMessage(fullMessage.begin(), fullMessage.end());
+        SendMessage(hConsoleEdit, EM_REPLACESEL, FALSE, (LPARAM)wMessage.c_str());
+        
+        // Scroll to bottom
+        SendMessage(hConsoleEdit, EM_SCROLLCARET, 0, 0);
+    }
+    
+    void Run() {
+        MSG msg;
+        while (GetMessage(&msg, nullptr, 0, 0)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+};
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
+    MultiRemuxer app;
+    
+    if (!app.Initialize(hInstance)) {
+        MessageBox(nullptr, L"Failed to initialize application", L"Error", MB_OK | MB_ICONERROR);
+        return 1;
+    }
+    
+    app.Run();
+    return 0;
+}
     
     bool ProcessTitle(const std::string& bdmvPath, const BDMVTitle& title, const std::string& outputFile) {
         // Build FFmpeg command
