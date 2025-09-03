@@ -1,0 +1,34 @@
+#include <windows.h>
+
+// Version information
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Multi-REMUXer"
+            VALUE "FileDescription", "Multi-REMUXer BDMV Processing Application"
+            VALUE "FileVersion", "1.0.0.0"
+            VALUE "InternalName", "MultiREMUXer"
+            VALUE "LegalCopyright", "Copyright (C) 2024"
+            VALUE "OriginalFilename", "MultiREMUXer.exe"
+            VALUE "ProductName", "Multi-REMUXer"
+            VALUE "ProductVersion", "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+// Application manifest for Windows 10/11 compatibility
+1 RT_MANIFEST "app.manifest"
